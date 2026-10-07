@@ -1,0 +1,35 @@
+name: CP exact-source isolated build
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: cp-b3187ae-provenance
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.event.repository.private == false && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Retrieve the pinned orchestration script from this dedicated repository
+        env:
+          BUILD_REPOSITORY: ${{ github.repository }}
+          BUILD_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "${BUILD_REPOSITORY#*/}" = crimson-cp-provenance-builder
+          mkdir -p artifacts
+          curl --fail --silent --show-error --max-time 60 --proto '=https' --tlsv1.2 \
+            "https://raw.githubusercontent.com/${BUILD_REPOSITORY}/${BUILD_WORKFLOW_SHA}/remote-build.sh" \
+            -o remote-build.sh
+          sha256sum remote-build.sh > artifacts/orchestration.sha256
+          bash remote-build.sh
+      - name: Preserve only the explicit evidence directory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cp-b3187ae-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
